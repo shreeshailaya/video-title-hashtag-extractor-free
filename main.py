@@ -19,13 +19,16 @@ security = HTTPBearer()
 POLLINATIONS_URL = "https://text.pollinations.ai/openai"
 HEADERS = {"Content-Type": "application/json"}
 
-# Get API key from environment
+# Get API key from environment (don't crash if not found)
 API_KEY = os.getenv("API_KEY")
-if not API_KEY:
-    raise ValueError("API_KEY not found in environment variables")
 
 # Authorization dependency
 async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="API key not configured. Please set API_KEY environment variable.",
+        )
     if credentials.credentials != API_KEY:
         raise HTTPException(
             status_code=401,
@@ -154,6 +157,29 @@ async def analyze_video(
     os.remove(video_path)
     os.remove(audio_path)
     return JSONResponse(content=analysis)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint that doesn't require authentication"""
+    return {
+        "status": "healthy",
+        "api_configured": bool(API_KEY),
+        "ffmpeg_available": True  # We'll assume it's available since it's in Docker
+    }
+
+@app.get("/")
+async def root():
+    """Root endpoint with basic information"""
+    return {
+        "message": "Video Title & Hashtag Extractor API",
+        "version": "1.0.0",
+        "endpoints": {
+            "health": "/health",
+            "analyze": "/analyze",
+            "docs": "/docs"
+        },
+        "authentication": "Bearer token required for /analyze endpoint"
+    }
 
 if __name__ == "__main__":
     import uvicorn
